@@ -1,0 +1,68 @@
+const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = value => value === null || value === undefined ? "暂无数据" : `${(value*100).toFixed(1)}%`;
+const palette = ["#2468df", "#df8533", "#17967b", "#8956c4", "#cf5688", "#54727e", "#968416", "#329fbc", "#b9543a", "#536ac5", "#66944c"];
+const labels = { product:"产品", need:"客户需求", region:"地区" };
+export const reportViewState = { dimension:"product", companyId:null, trendMetric:"priorityRate", hidden:new Set() };
+function evidenceButton(text, scope, companyId, key, metric="priorityRate", style="") {
+  return `<button class="report-data" data-peer="chart-evidence" data-scope="${esc(scope)}" data-company="${esc(companyId)}" data-key="${esc(key)}" data-metric="${metric}" ${style ? `style="${style}"` : ""}>${text}</button>`;
+}
+function sources(items) {
+  return items.map(s=> { let url; try { url=new URL(s.url); } catch { return ""; } if(!/^https?:$/.test(url.protocol)) return "";
+    return `<li><a href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">${esc(s.title || url.hostname)} ↗</a><small>${esc(s.channel || url.hostname)} · ${s.state === "read" ? "已读正文" : "待核实线索"}</small>${s.excerpt ? `<p>${esc(s.excerpt)}</p>` : s.note ? `<p>${esc(s.note)}</p>` : ""}</li>`; }).join("");
+}
+function gapCard(g, dashboard) {
+  const c=dashboard.companies.find(c=>c.id===g.companyId);
+  return `<article class="report-gap"><span>${labels[g.dimension]} · ${esc(g.label)}</span><strong>落后 ${(g.delta*100).toFixed(1)} 个百分点</strong><p>${esc(c.name)} ${pct(g.theirRate)} / 我们 ${pct(g.ourRate)}</p><small>${g.total} 条相关回答${g.total < 10 ? " · 小样本" : ""}</small>${evidenceButton("查看这项差距 →","dimension",c.id,g.rowId)}</article>`;
+}
+function overview(d) {
+  return `<section class="card report-panel"><h2>谁更容易被推荐</h2><p class="report-caption">所有公司使用相同的 ${d.totalAnswers} 条回答作分母。实色：提及率；浅色：推荐前五比例。点击数值查看原回答。</p><div class="report-bars">${d.companies.map((c,i)=>{
+    const m=d.overview[i]; return `<div class="report-bar-row"><b>${esc(c.name)}${c.own?"（我们）":""}</b><div>${[["mentionRate","提及"],["priorityRate","前五"]].map(([key,label],j)=>`<div class="report-bar-line"><small>${label}</small>${evidenceButton(`<span class="report-bar-track"><i style="width:${Math.max(0,(m[key]||0)*100)}%;background:${palette[i]};opacity:${j?.4:1}"></i></span><strong>${pct(m[key])}</strong>`,"overview",c.id,"",key)}</div>`).join("")}</div>${evidenceButton(`平均第 ${m.averagePosition === null ? "—" : m.averagePosition.toFixed(2)} 位<small>${m.rankedAnswers} 条明确排名</small>`,"overview",c.id,"","ranked")}</div>`;
+  }).join("")}</div></section>`;
+}
+function trend(d, state) {
+  const days=d.trend, metric=state.trendMetric;
+  const x=i=>55+(days.length === 1 ? 400 : i/(days.length-1)*800), y=v=>205-v*170;
+  const visible=d.companies.map((c,i)=>({c,i})).filter(({c})=>!state.hidden.has(c.id));
+  return `<section class="card report-panel"><div class="report-panel-head"><h2>最近的表现有没有改善</h2><div class="report-controls">${[["priorityRate","推荐前五"],["mentionRate","提及率"]].map(([id,label])=>`<button data-peer="report-trend" data-key="${id}" class="${metric===id?"active":""}">${label}</button>`).join("")}</div></div><p class="report-caption">按测试日期汇总，当天有多次测试时合并计算。没有测试的日期没有数据点；${days.length < 2 ? "当前不足两个测试日期，暂不能判断趋势。" : "点击圆点查看当天回答。"}</p>
+  <div class="report-legend">${d.companies.map((c,i)=>`<button data-peer="report-series" data-id="${esc(c.id)}" aria-pressed="${!state.hidden.has(c.id)}" style="--series:${palette[i]}">${esc(c.name)}</button>`).join("")}</div>
+  <div class="report-trend-wrap"><svg viewBox="0 0 900 250" class="report-trend" role="img" aria-label="各公司按日推荐表现折线图">${[0,.5,1].map(v=>`<line x1="55" x2="855" y1="${y(v)}" y2="${y(v)}" stroke="#dce5ef"/><text x="8" y="${y(v)+4}">${v*100}%</text>`).join("")}
+  ${days.filter((_,i)=>i===0||i===days.length-1||i%Math.max(1,Math.ceil(days.length/6))===0).map(day=>`<text x="${x(days.indexOf(day))}" y="233" text-anchor="middle">${day.day.slice(5)}</text>`).join("")}
+  ${visible.map(({c,i})=>`<polyline points="${days.map((day,n)=>`${x(n)},${y(day.cells[i][metric]||0)}`).join(" ")}" fill="none" stroke="${palette[i]}" stroke-width="2.5"/>${days.map((day,n)=>`<a href="#report-chart-evidence" data-peer="chart-evidence" data-scope="trend" data-company="${esc(c.id)}" data-key="${day.day}" data-metric="${metric}" aria-label="${esc(c.name)} ${day.day} ${pct(day.cells[i][metric])}"><circle cx="${x(n)}" cy="${y(day.cells[i][metric]||0)}" r="5" fill="${palette[i]}" stroke="white" stroke-width="1.5"><title>${esc(c.name)} · ${day.day} · ${pct(day.cells[i][metric])}</title></circle></a>`).join("")}`).join("")}</svg></div>
+  <details><summary>查看趋势数值表</summary><div class="report-table-wrap"><table><thead><tr><th>测试日期</th>${d.companies.map(c=>`<th>${esc(c.name)}</th>`).join("")}</tr></thead><tbody>${days.map(day=>`<tr><th>${day.day}</th>${day.cells.map(c=>`<td>${evidenceButton(pct(c[metric]),"trend",c.companyId,day.day,metric)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details></section>`;
+}
+function heatmap(d,state) {
+  const dimension=d.dimensions.find(g=>g.id===state.dimension);
+  return `<section class="card report-panel"><div class="report-panel-head"><h2>具体差在哪些需求</h2><div class="report-controls">${Object.entries(labels).map(([id,label])=>`<button data-peer="report-dimension" data-key="${id}" class="${state.dimension===id?"active":""}">${label}</button>`).join("")}</div></div><p class="report-caption">颜色越深，推荐前五比例越高。按问题内容分类，一道问题可涉及多个产品或需求；茶山问题单独归入茶山，未写明地区的不推定为全国。</p><div class="report-table-wrap"><table class="report-heatmap"><thead><tr><th>对比维度</th>${d.companies.map(c=>`<th>${esc(c.name)}${c.own?"（我们）":""}</th>`).join("")}</tr></thead><tbody>${dimension.rows.map(row=>`<tr><th>${row.label}<small>${row.total} 条回答${row.total>0&&row.total<10?" · 小样本":""}</small></th>${row.cells.map(cell=>`<td>${row.total ? evidenceButton(`<strong>${pct(cell.priorityRate)}</strong><small>${cell.topFive}/${row.total} 条</small>`,"dimension",cell.companyId,row.id,"priorityRate",`background:rgba(36,104,223,${.06+.7*cell.priorityRate});color:${cell.priorityRate>.5?"white":"#24466d"}`) : '<span class="report-no-data">暂无数据</span>'}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section>`;
+}
+function companyDetail(report,state) {
+  const d=report.dashboard;
+  const company=d.companies.find(c=>c.id===state.companyId&&!c.own)||d.companies[1];
+  const result=report.results.find(r=>r.companyId===company.id);
+  return `<section class="card report-panel"><div class="report-panel-head"><h2>这家公司，哪些做法值得参考</h2><label>查看同行 <select id="report-company">${d.companies.filter(c=>!c.own).map(c=>`<option value="${esc(c.id)}" ${c.id===company.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></label></div>${!result?`<p>正在整理 ${esc(company.name)} 的回答与公开资料。${["failed","interrupted"].includes(report.status)?"本次未完成，请重新分析。":"图表已可查看，详细建议将在资料核对后补充。"}</p>`:`
+  <h3>豆包介绍它时，更常强调什么</h3><p class="report-caption">这里统计“提及这家公司的回答中，有多少比例谈到该方面”，不是公司能力评分，也不等于推荐原因。点击比例查看原话。</p><div class="report-table-wrap"><table><thead><tr><th>回答强调的方面</th><th>${esc(d.companies[0].name)}</th><th>${esc(company.name)}</th><th>差别</th></tr></thead><tbody>${result.reasons.map(reason=>`<tr><th>${esc(reason.label)}</th><td>${evidenceButton(pct(reason.ourRate),"reason",company.id,reason.id,"ours")}</td><td>${evidenceButton(pct(reason.theirRate),"reason",company.id,reason.id,"theirs")}</td><td>${reason.ourRate===null||reason.theirRate===null?"暂无可比数据":`${((reason.theirRate-reason.ourRate)*100).toFixed(1)} 个百分点`}</td></tr>`).join("")}</tbody></table></div>
+  <h3>我们先做什么 · ${result.advice.length} 条建议</h3>${!result.advice.length?'<p class="report-empty">目前没有足够证据形成明确的优先改进建议。可继续查看图表和原回答，不据此凑建议。</p>':result.advice.map((a,i)=>`<article class="report-advice"><div class="report-advice-number">${i+1}</div><div><h3>${esc(a.label)}：补充买家能直接使用的信息</h3><p><span class="report-fact-tag">事实</span> ${esc(a.fact)}</p><p>${esc(a.observed)}</p><p class="report-inference"><span>可能的原因</span> ${esc(a.inference)}</p><div class="report-next"><b>我们具体怎么改</b><p>${esc(a.action)}</p><b>建议文章标题</b><p>${esc(a.title)}</p><b>内容提纲</b><ol>${a.outline.map(v=>`<li>${esc(v)}</li>`).join("")}</ol></div><small>${esc(a.limitation)}</small><details><summary>查看对应原文和双方公开资料</summary>${a.evidence?`<p class="peer-quote">${esc(a.evidence.snippet)}</p><button data-peer="answer" data-id="${esc(company.id)}" data-answer="${esc(a.evidence.answerId)}" class="tiny">查看完整回答</button>`:""}<h4>同行资料</h4><ul class="report-source-list">${sources(a.sources)||"<li>本次未核实到对应公开正文。</li>"}</ul><h4>我们公司的同类资料</h4><ul class="report-source-list">${sources(a.ourSources)||"<li>本次未读到同类页面，不能据此认定我们没有。</li>"}</ul></details></div></article>`).join("")}
+  <details class="report-sources"><summary>公开来源对照 · 同行 ${result.sources.filter(s=>s.state==="read").length} 篇 / 我们 ${result.ourSources.filter(s=>s.state==="read").length} 篇已读正文</summary><p class="report-caption">这些数量仅代表本次读取样本，不表示全网发布量，也不自动表示被豆包引用。</p><div class="report-source-columns"><div><h3>${esc(company.name)}</h3><ul class="report-source-list">${sources(result.sources)||"<li>未找到可核实来源。</li>"}</ul></div><div><h3>${esc(d.companies[0].name)}</h3><ul class="report-source-list">${sources(result.ourSources)||"<li>未找到可核实来源。</li>"}</ul></div></div><details><summary>查看检索记录与分析限制</summary>${[...result.searchAttempts,...result.ourSearchAttempts].map(a=>`<p>${esc(a.query||a.channel)}：${esc(a.error||({found:"找到线索",empty:"没有相关结果"}[a.status])||a.status)}</p>`).join("")}<ul>${result.limitations.map(l=>`<li>${esc(l)}</li>`).join("")}</ul></details></details>`}</section>`;
+}
+export function renderReportV2(report,state=reportViewState) {
+  const d=report.dashboard;
+  const top=[];for(const g of d.opportunities){if(!top.some(x=>x.rowId===g.rowId))top.push(g);if(top.length===3)break;}
+  const range=report.filters?.from||report.filters?.to?`${report.filters.from||"最早"} 至 ${report.filters.to||"现在"}`:"全部历史";
+  return `<div class="report-v2"><button class="secondary" data-peer="back-reports">← 返回报告列表</button><header class="report-cover"><div><span>豆包 · 同行差距分析</span><h2>看清差距，再决定先写什么</h2><p>${esc(range)}${report.filters?.runId?" · 已限定测试批次":""} · ${report.answerCount} 条回答 · ${report.runCount} 次测试</p><small>生成时间：${esc(new Date(report.createdAt).toLocaleString("zh-CN"))} · ${esc(report.message)}</small></div><button class="primary" data-peer="reanalyze" data-id="${esc(report.id)}">重新分析并保存新报告</button></header>${["queued","running"].includes(report.status)?`<progress value="${report.progress}" max="100"></progress>`:""}${report.changedSinceReport?'<p class="report-caption">名单已变化，本报告保留分析当时的数据。</p>':""}<h2>最值得先关注的 3 项差距</h2><p class="report-caption">按同行推荐前五比例领先我们的幅度排序。相同维度先展示差距最大的同行。</p><div class="report-top-gaps">${top.map(g=>gapCard(g,d)).join("")||'<p class="report-empty">本次各维度未发现同行推荐前五比例高于我们。</p>'}</div>${d.opportunities.length>top.length?`<details><summary>展开全部 ${d.opportunities.length} 项差距</summary><div class="report-top-gaps">${d.opportunities.map(g=>gapCard(g,d)).join("")}</div></details>`:""}${overview(d)}${trend(d,state)}${heatmap(d,state)}${companyDetail(report,state)}</div>`;
+}
+export function chartEvidence(report,button) {
+  const d=report.dashboard,{scope,company,key,metric}=button.dataset;
+  let cell, ids=[], title="", evidenceCompany=company;
+  if(scope==="overview") cell=d.overview.find(c=>c.companyId===company);
+  if(scope==="trend") { cell=d.trend.find(v=>v.day===key)?.cells.find(c=>c.companyId===company);title=key; }
+  if(scope==="dimension") { const row=d.dimensions.flatMap(g=>g.rows).find(r=>r.id===key);cell=row?.cells.find(c=>c.companyId===company);title=row?.label||""; }
+  if(scope==="reason") {
+    const result=report.results.find(r=>r.companyId===company), reason=result?.reasons.find(r=>r.id===key);
+    ids=metric==="ours"?reason?.ourIds:reason?.theirIds;evidenceCompany=metric==="ours"?d.companies[0].id:company;title=reason?.label||"";
+  } else if(cell) ids=metric==="cohort"?cell.answerIds:metric==="mentionRate"?cell.mentionIds:metric==="ranked"?d.evidence.find(e=>e.companyId===company).items.filter(e=>cell.answerIds.includes(e.answerId)&&e.position>0).map(e=>e.answerId):cell.priorityIds;
+  const cname=d.companies.find(c=>c.id===evidenceCompany)?.name||"";
+  const entries=d.evidence.find(e=>e.companyId===evidenceCompany)?.items||[];
+  const matching=(ids||[]).map(id=>entries.find(e=>e.answerId===id) || (metric==="cohort" ? {...d.questions.find(e=>e.answerId===id),snippet:"这条回答没有提及该公司，可展开完整回答核对。"} : null)).filter(Boolean);
+  const page=Math.max(0,Number(button.dataset.offset)||0), shown=matching.slice(page,page+20);
+  const nav=offset=>`<button data-peer="chart-evidence" data-scope="${esc(scope)}" data-company="${esc(company)}" data-key="${esc(key)}" data-metric="${esc(metric)}" data-offset="${offset}" class="secondary">${offset<page?"上一页":"下一页"}</button>`;
+  return `<h2>${esc(cname)} · ${esc(title||"总体表现")}</h2><p>${cell?`统计范围 ${cell.total} 条回答；` : ""}符合当前指标的回答 ${matching.length} 条${matching.length?`，显示 ${page+1}—${Math.min(page+20,matching.length)}`:""}。</p>${shown.map(e=>`<article class="peer-report-evidence"><b>${esc(e.question)}</b><small>${esc(e.date)} · ${e.position?`第 ${e.position} 位`:"未标明推荐位置"}</small><p class="peer-quote">${esc(e.snippet)}</p><button data-peer="answer" data-id="${esc(evidenceCompany)}" data-answer="${esc(e.answerId)}" class="tiny">查看完整回答</button></article>`).join("")||'<p>这个范围内没有符合该指标的回答。</p>'}${page>0?nav(page-20):""}${page+20<matching.length?nav(page+20):""}${cell && metric!=="cohort"?evidenceButton(`查看用于统计的全部 ${cell.total} 条回答`,scope,company,key,"cohort"):""}`;
+}

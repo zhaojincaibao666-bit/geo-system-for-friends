@@ -1,0 +1,2 @@
+# Parser engine only. Browser control remains in the existing Playwright layer.
+scrapling==0.4.15

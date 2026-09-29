@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>星图 GEO 内容运营</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/competitors.css" />
+    <link rel="stylesheet" href="/publisher.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside>
+        <div class="brand"><span class="brand-mark">✦</span><div>星图<span>GEO</span><small>内容运营工作台</small></div></div>
+        <nav id="nav">
+          <button class="nav-item active" data-view="overview">概览</button>
+          <button class="nav-item" data-view="monitoring">AI 可见性监测</button>
+          <button class="nav-item" data-view="competitors">同行可见度对比</button>
+          <button class="nav-item" data-view="publisher">发布</button>
+          <button class="nav-item" data-view="knowledge">审批资料库</button>
+          <button class="nav-item" data-view="content">选题与文章</button>
+          <button class="nav-item" data-view="rules">平台规则</button>
+          <button class="nav-item" data-view="publishing">发布日历</button>
+          <button class="nav-item" data-view="settings">系统设置</button>
+        </nav>
+        <div class="machine" id="machine-status">工作机：检查中…</div>
+      </aside>
+      <main>
+          <header><div><p class="eyebrow">内部运营系统 · 可审计的 AI 可见性闭环</p><h1 id="page-title">品牌可见性概览</h1></div><div class="header-actions"><button class="secondary" id="doubao-browser-smoke">浏览器连接检查</button><button class="secondary" id="full-doubao-monitor">开始 30 题实测</button><button class="danger hidden" id="stop-browser-monitor">停止当前测试</button><button class="primary" id="probe-button">补测作废回答</button></div></header>
+        <section id="flash" class="flash hidden"></section>
+        <section id="doubao-verification-alert" class="verification-alert hidden" role="alert" aria-live="assertive"></section>
+        <section id="doubao-monitor-progress" class="monitor-progress hidden" aria-live="polite"></section>
+        <section id="view"></section>
+      </main>
+    </div>
+    <button id="back-to-top" class="back-to-top" type="button" aria-label="回到页面顶部" title="回到顶部">↑</button>
+    <dialog id="dialog"><form method="dialog" id="dialog-form"><button class="dialog-close" value="cancel">×</button><div id="dialog-content"></div></form></dialog>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
